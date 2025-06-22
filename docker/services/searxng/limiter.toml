@@ -1,0 +1,41 @@
+# =============================================================================
+# SearxNG Rate Limiter Configuration
+# =============================================================================
+
+[botdetection.ip_limit]
+# activate link_token method in the ip_limit method
+link_token = true
+
+[botdetection.ip_lists]
+# activate link_token method in the ip_lists method  
+link_token = true
+
+[botdetection.ip_limit.cache]
+# cache of 100 IPs in the pool
+pool = 100
+
+[botdetection.ip_lists.cache]
+# cache of 100 IPs in the pool  
+pool = 100
+
+# IP addresses and networks that are allowed
+[botdetection.ip_lists.block_ip]
+
+# Block private networks (adjust as needed for your setup)
+# "127.0.0.1" = "localhost"
+# "192.168.0.0/16" = "private network"  
+# "10.0.0.0/8" = "private network"
+# "172.16.0.0/12" = "private network"
+
+[botdetection.ip_lists.pass_ip]
+# Allow docker network and local connections
+"127.0.0.1" = "localhost"
+"172.16.0.0/12" = "docker networks"
+"192.168.0.0/16" = "local network"
+
+[botdetection.ip_limit.env]
+# Rate limiting configuration
+# Sliding window: 5 requests in 10 seconds
+real_ip = 5
+minute = 60
+burst = 10 

@@ -1,0 +1,82 @@
+---
+- name: Update Home AI Stack Configuration
+  hosts: raspberry_pi
+  become: true
+  gather_facts: false
+  
+  vars:
+    project_name: homeai
+    remote_project_path: "/opt/{{ project_name }}"
+    
+  tasks:
+    - name: Sync docker configurations
+      synchronize:
+        src: "{{ playbook_dir }}/../../docker/"
+        dest: "{{ remote_project_path }}/docker/"
+        delete: true
+        rsync_opts:
+          - "--exclude=*.log"
+      become_user: "{{ homeai_user }}"
+      
+    - name: Sync workflows
+      synchronize:
+        src: "{{ playbook_dir }}/../../workflows/"
+        dest: "{{ remote_project_path }}/workflows/"
+        delete: true
+      become_user: "{{ homeai_user }}"
+      
+    - name: Sync scripts
+      synchronize:
+        src: "{{ playbook_dir }}/../../scripts/"
+        dest: "{{ remote_project_path }}/scripts/"
+        delete: false
+      become_user: "{{ homeai_user }}"
+      
+    - name: Make scripts executable
+      file:
+        path: "{{ remote_project_path }}/scripts/{{ item }}"
+        mode: '0755'
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+      loop:
+        - deploy.sh
+        - update-config.sh
+        - update-containers.sh
+        - logs.sh
+      ignore_errors: true
+      
+    - name: Check if .env file exists
+      stat:
+        path: "{{ remote_project_path }}/.env"
+      register: env_file
+      
+    - name: Display .env warning if missing
+      debug:
+        msg: |
+          WARNING: .env file not found at {{ remote_project_path }}/.env
+          Please ensure the environment file is properly configured before restarting services.
+      when: not env_file.stat.exists
+      
+    - name: Restart HomeAI services
+      systemd:
+        name: homeai
+        state: restarted
+      when: env_file.stat.exists
+      
+    - name: Wait for services to start
+      pause:
+        seconds: 30
+      when: env_file.stat.exists
+      
+    - name: Check service status
+      command: docker compose -f docker/docker-compose.yml ps
+      args:
+        chdir: "{{ remote_project_path }}"
+      become_user: "{{ homeai_user }}"
+      register: service_status
+      when: env_file.stat.exists
+      
+    - name: Display service status
+      debug:
+        var: service_status.stdout_lines
+      when: env_file.stat.exists and service_status is defined 

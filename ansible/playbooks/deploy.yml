@@ -1,0 +1,275 @@
+---
+- name: Deploy FlowLab to Raspberry Pi
+  hosts: raspberry_pi
+  become: true
+  gather_facts: true
+  timeout: 1800  # 30 minutes max
+  
+  vars:
+    project_name: homeai
+    remote_project_path: "/opt/{{ project_name }}"
+    required_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - git
+      - docker.io
+      - docker-compose
+      - jq
+    homeai_user: homeai
+    homeai_group: homeai
+    ansible_ssh_timeout: 30
+    
+  pre_tasks:
+    - name: "🧪 FlowLab Deployment Starting"
+      debug:
+        msg: |
+          🧪 FlowLab - Your Personal Automation Laboratory
+          📡 Deploying to: {{ ansible_host }}
+          🚀 Where workflows come to life!
+        
+    - name: "🔌 Test connectivity"
+      ping:
+      timeout: 10
+      
+    - name: "💾 Check disk space"
+      shell: df -h / | awk 'NR==2 {print $4}' | sed 's/G//'
+      register: disk_space
+      changed_when: false
+      
+    - name: "⚠️  Verify sufficient disk space"
+      fail:
+        msg: "Insufficient disk space. Need at least 8GB, found {{ disk_space.stdout }}GB"
+      when: disk_space.stdout | int < 8
+
+  tasks:
+    - name: "📦 Update package cache"
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      timeout: 300
+      
+    - name: "⬆️  Upgrade system packages"
+      apt:
+        upgrade: dist
+        autoclean: yes
+        autoremove: yes
+      timeout: 900
+      
+    - name: "📋 Install required packages"
+      apt:
+        name: "{{ required_packages }}"
+        state: present
+      timeout: 600
+        
+    - name: "👥 Create homeai group"
+      group:
+        name: "{{ homeai_group }}"
+        state: present
+        
+    - name: "👤 Create homeai user"
+      user:
+        name: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        groups: docker
+        shell: /bin/bash
+        create_home: yes
+        state: present
+        
+    - name: "🐳 Add pi user to docker group"
+      user:
+        name: pi
+        groups: docker
+        append: yes
+        
+    - name: "🚀 Enable and start Docker service"
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+        
+    - name: "⏳ Wait for Docker to be ready"
+      wait_for:
+        path: /var/run/docker.sock
+        timeout: 60
+        
+    - name: "✅ Verify Docker is working"
+      command: docker --version
+      register: docker_verify
+      changed_when: false
+        
+    - name: "🧹 Clean up any existing problematic volumes"
+      shell: |
+        # Stop any existing containers
+        cd {{ remote_project_path }} && docker-compose down || true
+        # Remove problematic volumes that might have directories instead of files
+        docker volume rm homeai_freqtrade_data || true
+      become_user: "{{ homeai_user }}"
+      ignore_errors: true
+      
+    - name: "📁 Create project directories"
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0755'
+      loop:
+        - "{{ remote_project_path }}"
+        - "{{ remote_project_path }}/services"
+        - "{{ remote_project_path }}/services/freqtrade"
+        - "{{ remote_project_path }}/services/freqtrade/strategies"
+        - "{{ remote_project_path }}/workflows"
+        - "{{ remote_project_path }}/workflows/n8n"
+        
+    - name: "📋 Copy configuration file"
+      copy:
+        src: "{{ playbook_dir }}/../../config.env"
+        dest: "{{ remote_project_path }}/config.env"
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0644'
+        
+    - name: "🐳 Copy Docker Compose file"
+      copy:
+        src: "{{ playbook_dir }}/../../docker/docker-compose.yml"
+        dest: "{{ remote_project_path }}/docker-compose.yml"
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0644'
+        
+
+        
+    - name: "📈 Copy Freqtrade config file"
+      copy:
+        src: "{{ playbook_dir }}/../../docker/services/freqtrade/config.json"
+        dest: "{{ remote_project_path }}/services/freqtrade/config.json"
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0644'
+        
+    - name: "📈 Copy Freqtrade strategy file"
+      copy:
+        src: "{{ playbook_dir }}/../../docker/services/freqtrade/strategies/SimpleStrategy.py"
+        dest: "{{ remote_project_path }}/services/freqtrade/strategies/SimpleStrategy.py"
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0644'
+        
+    - name: "🔄 Copy workflow templates"
+      copy:
+        src: "{{ playbook_dir }}/../../workflows/"
+        dest: "{{ remote_project_path }}/workflows/"
+        owner: "{{ homeai_user }}"
+        group: "{{ homeai_group }}"
+        mode: '0644'
+      ignore_errors: true
+        
+    - name: "⚙️  Create systemd service"
+      template:
+        src: "{{ playbook_dir }}/../templates/homeai.service.j2"
+        dest: /etc/systemd/system/homeai.service
+        mode: '0644'
+      notify:
+        - reload systemd
+        - start homeai
+        
+    - name: "🛠️  Initialize Freqtrade volume with config"
+      shell: |
+        cd {{ remote_project_path }}
+        source config.env
+        # Create volume and initialize with config
+        docker-compose pull freqtrade
+        docker volume create homeai_freqtrade_data || true
+        docker run --rm \
+          -v homeai_freqtrade_data:/freqtrade/user_data \
+          -v {{ remote_project_path }}/services/freqtrade/config.json:/tmp/config.json \
+          -v {{ remote_project_path }}/services/freqtrade/strategies:/tmp/strategies \
+          busybox sh -c "
+            cp /tmp/config.json /freqtrade/user_data/ && 
+            cp -r /tmp/strategies /freqtrade/user_data/
+          "
+      become_user: "{{ homeai_user }}"
+      
+    - name: "🚀 Start services"
+      shell: |
+        cd {{ remote_project_path }}
+        source config.env
+        docker-compose up -d
+      become_user: "{{ homeai_user }}"
+      
+    - name: "🔧 Enable HomeAI service"
+      systemd:
+        name: homeai
+        enabled: yes
+        daemon_reload: yes
+        
+    - name: "⏳ Wait for services to start"
+      pause:
+        seconds: 30
+        
+    - name: "✅ Verify core services are running"
+      shell: |
+        cd {{ remote_project_path }}
+        docker-compose ps | awk 'NR>2 && $2 ~ /Up/ {print $1}' | sed 's/_[0-9]*$//'
+      become_user: "{{ homeai_user }}"
+      register: running_services
+      failed_when: false
+      
+    - name: "📊 Service status summary"
+      debug:
+        msg: |
+          🟢 Running services: {{ running_services.stdout_lines | join(', ') if running_services.stdout_lines | length > 0 else 'None detected' }}
+          📈 Total running: {{ running_services.stdout_lines | length }}/6 expected services
+          📝 If any services are missing, check logs with: ./scripts/helpers/logs.sh [service_name]
+          🐳 Full docker-compose status: Use 'docker-compose ps' on target system for detailed view
+          
+    - name: "🔍 Debug: Show raw docker-compose output"
+      shell: |
+        cd {{ remote_project_path }}
+        echo "=== Docker Compose PS Output ==="
+        docker-compose ps
+        echo "=== Docker Container List ==="
+        docker ps -a
+      become_user: "{{ homeai_user }}"
+      register: debug_output
+      when: running_services.stdout_lines | length == 0
+      
+    - name: "🐛 Debug output"
+      debug:
+        msg: "{{ debug_output.stdout_lines }}"
+      when: running_services.stdout_lines | length == 0 and debug_output is defined
+      
+
+        
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: true
+        
+    - name: start homeai
+      systemd:
+        name: homeai
+        state: started
+
+  post_tasks:
+    - name: "🎉 Deployment completed successfully"
+      debug:
+        msg: |
+          🧪 FlowLab Successfully Deployed! 🧪
+          Your personal automation laboratory is ready!
+          
+          🏠 Local Services:
+          📊 N8N:          http://{{ ansible_host }}:5678
+          🔍 SearxNG:      http://{{ ansible_host }}:8080  
+          📈 Freqtrade:    http://{{ ansible_host }}:8081
+          🐳 Portainer:    http://{{ ansible_host }}:9000
+          
+          📝 Notes:
+          • Services are starting up (may take 2-3 minutes)
+          • All configurations are clean - create your own passwords
+          • Data persists across deployments
+          • Auto-updates run daily at 2 AM
+ 

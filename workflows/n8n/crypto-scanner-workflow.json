@@ -1,0 +1,492 @@
+{
+  "name": "Advanced Crypto Market Analyzer - Self-Hosted",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0,8,12,16,20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.coingecko.com/api/v3/global",
+        "options": {}
+      },
+      "id": "market-overview",
+      "name": "Market Overview",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.alternative.me/fng/",
+        "options": {}
+      },
+      "id": "fear-greed-index",
+      "name": "Fear & Greed Index",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=1h,24h,7d,30d",
+        "options": {}
+      },
+      "id": "top-100-coins",
+      "name": "Top 100 Coins",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 400]
+    },
+        {
+      "parameters": {
+        "url": "http://searxng:8080/search?q=cryptocurrency%20bitcoin%20ethereum%20crypto%20market%20blockchain%20news&categories=news&time_range=day&pageno=1",
+        "options": {}
+      },
+      "id": "searxng-crypto-news",
+      "name": "SearxNG Crypto News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse SearxNG HTML response to extract news results\nconst htmlContent = $input.first().binary.data.toString();\n\n// Simple HTML parsing to extract search results\nconst results = [];\n\n// Extract result blocks using regex patterns\nconst resultPattern = /<article[^>]*class=\"[^\"]*result[^\"]*\"[^>]*>([\\s\\S]*?)<\\/article>/gi;\nlet match;\n\nwhile ((match = resultPattern.exec(htmlContent)) !== null) {\n  const resultHtml = match[1];\n  \n  // Extract title (remove HTML tags and highlights)\n  const titleMatch = /<h3[^>]*>\\s*<a[^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h3>/i.exec(resultHtml);\n  let title = titleMatch ? titleMatch[1].trim() : '';\n  // Remove highlight spans\n  title = title.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n  title = title.replace(/<[^>]+>/g, '').trim();\n  \n  // Extract URL\n  const urlMatch = /<h3[^>]*>\\s*<a[^>]*href=\"([^\"]+)\"/i.exec(resultHtml);\n  const url = urlMatch ? urlMatch[1] : '';\n  \n  // Extract content/description (remove HTML tags and highlights)\n  const contentMatch = /<p[^>]*class=\"[^\"]*content[^\"]*\"[^>]*>([\\s\\S]*?)<\\/p>/i.exec(resultHtml);\n  let content = contentMatch ? contentMatch[1].trim() : '';\n  // Remove highlight spans\n  content = content.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n  content = content.replace(/<[^>]+>/g, '').trim();\n  \n  // Extract engine/source\n  const engineMatch = /<div[^>]*class=\"engines\"[^>]*>[\\s\\S]*?<span>([^<]+)<\\/span>/i.exec(resultHtml);\n  const engine = engineMatch ? engineMatch[1].trim() : 'unknown';\n  \n  if (title && url) {\n    results.push({\n      title: title,\n      url: url,\n      content: content,\n      engine: engine\n    });\n  }\n}\n\n// If no results found with the above pattern, try alternative parsing\nif (results.length === 0) {\n  // Try simpler pattern for title and URL extraction\n  const linkPattern = /<h3[^>]*>\\s*<a[^>]*href=\"([^\"]+)\"[^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let linkMatch;\n  \n  while ((linkMatch = linkPattern.exec(htmlContent)) !== null) {\n    let title = linkMatch[2].trim();\n    title = title.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n    title = title.replace(/<[^>]+>/g, '').trim();\n    \n    results.push({\n      title: title,\n      url: linkMatch[1],\n      content: '',\n      engine: 'searxng'\n    });\n  }\n}\n\nreturn {\n  results: results,\n  total_results: results.length,\n  parsed_from: 'html'\n};"
+      },
+      "id": "parse-crypto-news-html",
+      "name": "Parse Crypto News HTML",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [580, 500]
+    },
+    {
+      "parameters": {},
+      "id": "merge-market-data",
+      "name": "Merge Market Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [680, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze overall market conditions\nconst marketData = $('Market Overview').first().json.data;\nconst fearGreed = $('Fear & Greed Index').first().json.data[0];\nconst coins = $('Top 100 Coins').first().json;\nconst searchResults = $('Parse Crypto News HTML').first().json;\n\n// Market Context Analysis\nconst btcDominance = marketData.market_cap_percentage.btc;\nconst totalMarketCap = marketData.total_market_cap.usd;\nconst totalVolume = marketData.total_volume.usd;\nconst fearGreedValue = fearGreed.value;\nconst fearGreedClassification = fearGreed.value_classification;\n\n// Filter coins with sufficient volume and market cap for Freqtrade analysis\nconst filteredCoins = coins.filter(coin => {\n  return coin.market_cap > 100000000 && // $100M+ market cap\n         coin.total_volume > 10000000 && // $10M+ 24h volume\n         coin.current_price > 0.001 && // Avoid extremely low price coins\n         coin.market_cap_rank <= 50 && // Top 50 only for quality\n         ['BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'MATIC', 'LTC', 'AVAX', \n          'LINK', 'UNI', 'ATOM', 'XLM', 'FIL', 'TRX', 'ETC', 'THETA', 'VET', 'ICP'].includes(coin.symbol.toUpperCase());\n}).slice(0, 20); // Limit to top 20 for analysis\n\n// Process SearxNG news results\nconst newsResults = searchResults.results || [];\nconst recentNews = newsResults.slice(0, 20);\nconst newsTitles = recentNews.map(result => result.title || '').join(' ');\n\n// Market structure analysis\nconst gainers = coins.filter(coin => coin.price_change_percentage_24h > 5).length;\nconst losers = coins.filter(coin => coin.price_change_percentage_24h < -5).length;\nconst sideways = coins.length - gainers - losers;\n\nconst marketStructure = {\n  gainers: gainers,\n  losers: losers,\n  sideways: sideways,\n  bullish_ratio: gainers / coins.length,\n  bearish_ratio: losers / coins.length\n};\n\n// Volume analysis\nconst avgVolume = coins.reduce((sum, coin) => sum + coin.total_volume, 0) / coins.length;\nconst highVolumeCoins = coins.filter(coin => coin.total_volume > avgVolume * 2).length;\n\nreturn [{\n  marketOverview: {\n    btc_dominance: btcDominance,\n    total_market_cap: totalMarketCap,\n    total_volume: totalVolume,\n    fear_greed_index: fearGreedValue,\n    fear_greed_sentiment: fearGreedClassification\n  },\n  marketStructure: marketStructure,\n  volumeAnalysis: {\n    average_volume: avgVolume,\n    high_volume_coins: highVolumeCoins\n  },\n  newsContext: {\n    articles_count: newsResults.length,\n    news_titles: newsTitles,\n    search_results: recentNews\n  },\n  filteredCoins: filteredCoins,\n  analysis_timestamp: new Date().toISOString()\n}];"
+      },
+      "id": "market-context-analysis",
+      "name": "Market Context Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 350]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-coins-analysis",
+      "name": "Split for Analysis",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1120, 350]
+    },
+    {
+      "parameters": {
+        "url": "=http://freqtrade:8080/api/v1/pair_candles?pair={{ $json.symbol.toUpperCase() }}/USDT&timeframe=4h&limit=200",
+        "options": {}
+      },
+      "id": "freqtrade-4h-data",
+      "name": "Freqtrade 4H Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 250]
+    },
+    {
+      "parameters": {
+        "url": "=http://freqtrade:8080/api/v1/pair_candles?pair={{ $('Split for Analysis').item.json.symbol.toUpperCase() }}/USDT&timeframe=1d&limit=100",
+        "options": {}
+      },
+      "id": "freqtrade-daily-data",
+      "name": "Freqtrade Daily Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 350]
+    },
+    {
+      "parameters": {
+        "url": "=http://searxng:8080/search?q={{ encodeURIComponent($('Split for Analysis').item.json.name + ' ' + $('Split for Analysis').item.json.symbol + ' cryptocurrency') }}&categories=news&time_range=week&pageno=1",
+        "options": {}
+      },
+      "id": "searxng-coin-news",
+      "name": "SearxNG Coin News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse SearxNG HTML response for coin-specific news\nconst htmlContent = $input.first().binary.data.toString();\n\n// Simple HTML parsing to extract search results\nconst results = [];\n\n// Extract result blocks using regex patterns\nconst resultPattern = /<article[^>]*class=\"[^\"]*result[^\"]*\"[^>]*>([\\s\\S]*?)<\\/article>/gi;\nlet match;\n\nwhile ((match = resultPattern.exec(htmlContent)) !== null) {\n  const resultHtml = match[1];\n  \n  // Extract title (remove HTML tags and highlights)\n  const titleMatch = /<h3[^>]*>\\s*<a[^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h3>/i.exec(resultHtml);\n  let title = titleMatch ? titleMatch[1].trim() : '';\n  // Remove highlight spans\n  title = title.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n  title = title.replace(/<[^>]+>/g, '').trim();\n  \n  // Extract URL\n  const urlMatch = /<h3[^>]*>\\s*<a[^>]*href=\"([^\"]+)\"/i.exec(resultHtml);\n  const url = urlMatch ? urlMatch[1] : '';\n  \n  // Extract content/description (remove HTML tags and highlights)\n  const contentMatch = /<p[^>]*class=\"[^\"]*content[^\"]*\"[^>]*>([\\s\\S]*?)<\\/p>/i.exec(resultHtml);\n  let content = contentMatch ? contentMatch[1].trim() : '';\n  // Remove highlight spans\n  content = content.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n  content = content.replace(/<[^>]+>/g, '').trim();\n  \n  // Extract engine/source\n  const engineMatch = /<div[^>]*class=\"engines\"[^>]*>[\\s\\S]*?<span>([^<]+)<\\/span>/i.exec(resultHtml);\n  const engine = engineMatch ? engineMatch[1].trim() : 'unknown';\n  \n  if (title && url) {\n    results.push({\n      title: title,\n      url: url,\n      content: content,\n      engine: engine\n    });\n  }\n}\n\n// If no results found with the above pattern, try alternative parsing\nif (results.length === 0) {\n  // Try simpler pattern for title and URL extraction\n  const linkPattern = /<h3[^>]*>\\s*<a[^>]*href=\"([^\"]+)\"[^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let linkMatch;\n  \n  while ((linkMatch = linkPattern.exec(htmlContent)) !== null) {\n    let title = linkMatch[2].trim();\n    title = title.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n    title = title.replace(/<[^>]+>/g, '').trim();\n    \n    results.push({\n      title: title,\n      url: linkMatch[1],\n      content: '',\n      engine: 'searxng'\n    });\n  }\n}\n\nreturn {\n  results: results,\n  total_results: results.length,\n  parsed_from: 'html'\n};"
+      },
+      "id": "parse-coin-news-html",
+      "name": "Parse Coin News HTML",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1680, 450]
+    },
+    {
+      "parameters": {
+        "url": "https://sentim-api.herokuapp.com/api/v1/",
+        "options": {
+          "bodyContentType": "json",
+          "body": {
+            "parameters": [
+              {
+                "name": "text",
+                "value": "={{ $json.results ? $json.results.slice(0, 10).map(result => result.title + ' ' + (result.content || '')).join(' ') : '' }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "coin-sentiment",
+      "name": "Coin Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 450]
+    },
+    {
+      "parameters": {},
+      "id": "merge-coin-analysis",
+      "name": "Merge Coin Analysis",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1780, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Advanced Technical Analysis using Freqtrade data\nconst coinData = $('Split for Analysis').item.json;\nconst marketContext = $('Market Context Analysis').first().json;\nconst candles4h = $('Freqtrade 4H Data').first().json.data || [];\nconst candlesDaily = $('Freqtrade Daily Data').first().json.data || [];\nconst coinNews = $('Parse Coin News HTML').first().json;\nconst sentiment = $('Coin Sentiment').first().json;\n\n// Helper function to calculate technical indicators\nfunction calculateRSI(prices, period = 14) {\n  if (prices.length < period + 1) return 50;\n  \n  let gains = 0, losses = 0;\n  for (let i = 1; i <= period; i++) {\n    const change = prices[prices.length - i] - prices[prices.length - i - 1];\n    if (change > 0) gains += change;\n    else losses -= change;\n  }\n  \n  const avgGain = gains / period;\n  const avgLoss = losses / period;\n  const rs = avgGain / avgLoss;\n  return 100 - (100 / (1 + rs));\n}\n\nfunction calculateEMA(prices, period) {\n  if (prices.length < period) return prices[prices.length - 1];\n  \n  const k = 2 / (period + 1);\n  let ema = prices[prices.length - period];\n  \n  for (let i = prices.length - period + 1; i < prices.length; i++) {\n    ema = (prices[i] * k) + (ema * (1 - k));\n  }\n  return ema;\n}\n\nfunction calculateMACD(prices, fast = 12, slow = 26, signal = 9) {\n  if (prices.length < slow + signal) return { macd: 0, signal: 0, histogram: 0 };\n  \n  const emaFast = calculateEMA(prices, fast);\n  const emaSlow = calculateEMA(prices, slow);\n  const macdLine = emaFast - emaSlow;\n  \n  // Simplified signal calculation\n  const macdValues = [];\n  for (let i = slow; i < prices.length; i++) {\n    const fastEma = calculateEMA(prices.slice(0, i + 1), fast);\n    const slowEma = calculateEMA(prices.slice(0, i + 1), slow);\n    macdValues.push(fastEma - slowEma);\n  }\n  \n  const signalLine = calculateEMA(macdValues, signal);\n  const histogram = macdLine - signalLine;\n  \n  return { macd: macdLine, signal: signalLine, histogram: histogram };\n}\n\nfunction calculateATR(candles, period = 14) {\n  if (candles.length < period) return 0;\n  \n  let trSum = 0;\n  for (let i = Math.max(1, candles.length - period); i < candles.length; i++) {\n    const high = candles[i][2];\n    const low = candles[i][3];\n    const prevClose = candles[i - 1][4];\n    \n    const tr = Math.max(\n      high - low,\n      Math.abs(high - prevClose),\n      Math.abs(low - prevClose)\n    );\n    trSum += tr;\n  }\n  \n  return trSum / period;\n}\n\n// Extract price data\nconst price = coinData.current_price;\nconst volume24h = coinData.total_volume;\nconst marketCap = coinData.market_cap;\nconst priceChange24h = coinData.price_change_percentage_24h;\nconst priceChange7d = coinData.price_change_percentage_7d;\n\n// Calculate technical indicators for 4H timeframe\nconst prices4h = candles4h.map(candle => candle[4]); // closing prices\nconst highs4h = candles4h.map(candle => candle[2]);\nconst lows4h = candles4h.map(candle => candle[3]);\nconst volumes4h = candles4h.map(candle => candle[5]);\n\nconst rsi4h = calculateRSI(prices4h);\nconst macd4h = calculateMACD(prices4h);\nconst ema9_4h = calculateEMA(prices4h, 9);\nconst ema21_4h = calculateEMA(prices4h, 21);\nconst ema50_4h = calculateEMA(prices4h, 50);\nconst ema200_4h = calculateEMA(prices4h, 200);\nconst atr4h = calculateATR(candles4h);\n\n// Calculate technical indicators for Daily timeframe\nconst pricesDaily = candlesDaily.map(candle => candle[4]);\nconst rsiDaily = calculateRSI(pricesDaily);\nconst macdDaily = calculateMACD(pricesDaily);\nconst ema50Daily = calculateEMA(pricesDaily, 50);\nconst ema200Daily = calculateEMA(pricesDaily, 200);\n\n// Bollinger Bands calculation\nconst sma20 = prices4h.slice(-20).reduce((sum, price) => sum + price, 0) / 20;\nconst variance = prices4h.slice(-20).reduce((sum, price) => sum + Math.pow(price - sma20, 2), 0) / 20;\nconst stdDev = Math.sqrt(variance);\nconst bbUpper = sma20 + (stdDev * 2);\nconst bbLower = sma20 - (stdDev * 2);\n\n// Volume analysis\nconst avgVolume4h = volumes4h.slice(-20).reduce((sum, vol) => sum + vol, 0) / 20;\nconst currentVolume = volumes4h[volumes4h.length - 1];\nconst volumeRatio = currentVolume / avgVolume4h;\n\n// Sentiment Analysis\nconst sentimentScore = sentiment.result?.polarity || 0;\nconst newsCount = coinNews.results?.length || 0;\n\n// Advanced Signal Analysis\nlet bullishScore = 0;\nlet bullishReasons = [];\nlet bearishScore = 0;\nlet bearishReasons = [];\n\n// === BULLISH SIGNAL DETECTION ===\n\n// 1. Multi-timeframe RSI analysis\nif (rsi4h < 35 && rsiDaily < 45) {\n  bullishScore += 2;\n  bullishReasons.push('Multi-TF RSI oversold');\n} else if (rsi4h < 40) {\n  bullishScore += 1;\n  bullishReasons.push('4H RSI oversold');\n}\n\n// 2. MACD Analysis\nif (macd4h.macd > macd4h.signal && macdDaily.macd > macdDaily.signal) {\n  bullishScore += 2;\n  bullishReasons.push('Multi-TF MACD bullish');\n} else if (macd4h.macd > macd4h.signal) {\n  bullishScore += 1;\n  bullishReasons.push('4H MACD cross up');\n}\n\n// 3. EMA Structure Analysis\nif (price > ema9_4h && ema9_4h > ema21_4h && ema21_4h > ema50_4h && ema50Daily > ema200Daily) {\n  bullishScore += 3;\n  bullishReasons.push('Perfect EMA alignment');\n} else if (price > ema21_4h && ema50Daily > ema200Daily) {\n  bullishScore += 2;\n  bullishReasons.push('Bullish EMA structure');\n} else if (price > ema50_4h) {\n  bullishScore += 1;\n  bullishReasons.push('Above key EMAs');\n}\n\n// 4. Bollinger Bands Analysis\nif (price < bbLower && rsi4h < 35) {\n  bullishScore += 2;\n  bullishReasons.push('BB oversold + RSI');\n}\n\n// 5. Volume Analysis\nif (volumeRatio > 1.5 && priceChange24h > 0) {\n  bullishScore += 1;\n  bullishReasons.push('High volume breakout');\n}\n\n// 6. Sentiment & News\nif (sentimentScore > 0.3 && newsCount > 2) {\n  bullishScore += 1;\n  bullishReasons.push('Positive sentiment + news');\n}\n\n// 7. Market Structure\nif (marketContext.marketStructure.bullish_ratio > 0.6 && marketContext.marketOverview.fear_greed_index > 50) {\n  bullishScore += 1;\n  bullishReasons.push('Bullish market structure');\n}\n\n// === BEARISH SIGNAL DETECTION ===\n\n// 1. Multi-timeframe RSI analysis\nif (rsi4h > 75 && rsiDaily > 65) {\n  bearishScore += 2;\n  bearishReasons.push('Multi-TF RSI overbought');\n} else if (rsi4h > 70) {\n  bearishScore += 1;\n  bearishReasons.push('4H RSI overbought');\n}\n\n// 2. MACD Analysis\nif (macd4h.macd < macd4h.signal && macdDaily.macd < macdDaily.signal) {\n  bearishScore += 2;\n  bearishReasons.push('Multi-TF MACD bearish');\n} else if (macd4h.macd < macd4h.signal) {\n  bearishScore += 1;\n  bearishReasons.push('4H MACD cross down');\n}\n\n// 3. EMA Structure Analysis\nif (price < ema9_4h && ema9_4h < ema21_4h && ema21_4h < ema50_4h && ema50Daily < ema200Daily) {\n  bearishScore += 3;\n  bearishReasons.push('Perfect EMA bearish alignment');\n} else if (price < ema21_4h && ema50Daily < ema200Daily) {\n  bearishScore += 2;\n  bearishReasons.push('Bearish EMA structure');\n} else if (price < ema50_4h) {\n  bearishScore += 1;\n  bearishReasons.push('Below key EMAs');\n}\n\n// 4. Bollinger Bands Analysis\nif (price > bbUpper && rsi4h > 75) {\n  bearishScore += 2;\n  bearishReasons.push('BB overbought + RSI');\n}\n\n// 5. Volume Analysis\nif (volumeRatio > 1.5 && priceChange24h < 0) {\n  bearishScore += 1;\n  bearishReasons.push('High volume breakdown');\n}\n\n// 6. Sentiment & News\nif (sentimentScore < -0.3 && newsCount > 2) {\n  bearishScore += 1;\n  bearishReasons.push('Negative sentiment + news');\n}\n\n// 7. Market Structure\nif (marketContext.marketStructure.bearish_ratio > 0.6 && marketContext.marketOverview.fear_greed_index < 30) {\n  bearishScore += 1;\n  bearishReasons.push('Bearish market structure');\n}\n\n// === SIGNAL VALIDATION ===\nlet direction = null;\nlet finalScore = 0;\nlet finalReasons = [];\nlet confidence = 0;\n\nif (bullishScore >= 6) {\n  direction = 'LONG';\n  finalScore = bullishScore;\n  finalReasons = bullishReasons;\n  confidence = Math.min(finalScore * 10 + 20, 85);\n} else if (bearishScore >= 6) {\n  direction = 'SHORT';\n  finalScore = bearishScore;\n  finalReasons = bearishReasons;\n  confidence = Math.min(finalScore * 10 + 20, 85);\n}\n\n// Calculate entry, stop loss, and take profits using ATR\nif (direction && atr4h > 0) {\n  let entry, stopLoss, takeProfit1, takeProfit2;\n  const atrMultiplier = Math.max(atr4h, price * 0.02); // Minimum 2% or ATR\n  \n  if (direction === 'LONG') {\n    entry = price;\n    stopLoss = price - (atrMultiplier * 2);\n    takeProfit1 = price + (atrMultiplier * 3);\n    takeProfit2 = price + (atrMultiplier * 5);\n  } else {\n    entry = price;\n    stopLoss = price + (atrMultiplier * 2);\n    takeProfit1 = price - (atrMultiplier * 3);\n    takeProfit2 = price - (atrMultiplier * 5);\n  }\n  \n  return {\n    signal_found: true,\n    symbol: coinData.symbol.toUpperCase(),\n    name: coinData.name,\n    direction: direction,\n    entry: entry,\n    stop_loss: stopLoss,\n    take_profit_1: takeProfit1,\n    take_profit_2: takeProfit2,\n    confidence: confidence,\n    score: finalScore,\n    reasons: finalReasons,\n    market_cap: marketCap,\n    volume_24h: volume24h,\n    price_change_24h: priceChange24h,\n    rsi_4h: rsi4h,\n    rsi_daily: rsiDaily,\n    sentiment: sentimentScore,\n    news_count: newsCount,\n    atr: atr4h,\n    volume_ratio: volumeRatio,\n    analysis_timestamp: new Date().toISOString()\n  };\n} else {\n  return {\n    signal_found: false,\n    symbol: coinData.symbol.toUpperCase(),\n    name: coinData.name,\n    bullish_score: bullishScore,\n    bearish_score: bearishScore,\n    price: price,\n    rsi_4h: rsi4h,\n    rsi_daily: rsiDaily,\n    sentiment: sentimentScore,\n    reasons_bull: bullishReasons,\n    reasons_bear: bearishReasons,\n    atr: atr4h,\n    volume_ratio: volumeRatio,\n    analysis_timestamp: new Date().toISOString()\n  };\n}"
+      },
+      "id": "advanced-signal-analysis",
+      "name": "Advanced Signal Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2000, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.signal_found }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter-valid-signals",
+      "name": "Filter Valid Signals",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2220, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final market analysis and signals\nconst allAnalysis = $input.all();\nconst validSignals = allAnalysis.filter(item => item.json.signal_found === true);\nconst marketContext = $('Market Context Analysis').first().json;\n\nif (validSignals.length > 0) {\n  // Build high-conviction signals message\n  let message = `🔥 **HIGH-CONVICTION CRYPTO SIGNALS** (Self-Hosted Analysis)\\n\\n`;\n  \n  validSignals.forEach((signal, index) => {\n    const data = signal.json;\n    const riskReward = Math.abs((data.take_profit_1 - data.entry) / (data.entry - data.stop_loss)).toFixed(1);\n    \n    message += `**${index + 1}. ${data.symbol}** (${data.name}) - **${data.direction}**\\n`;\n    message += `💰 Entry: $${data.entry.toFixed(data.entry < 1 ? 6 : 2)}\\n`;\n    message += `🛡️ Stop Loss: $${data.stop_loss.toFixed(data.stop_loss < 1 ? 6 : 2)}\\n`;\n    message += `🎯 TP1: $${data.take_profit_1.toFixed(data.take_profit_1 < 1 ? 6 : 2)}\\n`;\n    message += `🚀 TP2: $${data.take_profit_2.toFixed(data.take_profit_2 < 1 ? 6 : 2)}\\n`;\n    message += `📊 Confidence: ${data.confidence}% | Score: ${data.score}/10\\n`;\n    message += `📈 R:R Ratio: 1:${riskReward} | ATR: ${data.atr.toFixed(4)}\\n`;\n    message += `📊 Vol Ratio: ${data.volume_ratio.toFixed(1)}x\\n`;\n    message += `💡 Key Factors: ${data.reasons.slice(0, 3).join(', ')}\\n\\n`;\n  });\n  \n  // Add market context\n  message += `📊 **MARKET CONTEXT**\\n`;\n  message += `• Fear & Greed: ${marketContext.marketOverview.fear_greed_index}/100 (${marketContext.marketOverview.fear_greed_sentiment})\\n`;\n  message += `• BTC Dominance: ${marketContext.marketOverview.btc_dominance.toFixed(1)}%\\n`;\n  message += `• Market Structure: ${(marketContext.marketStructure.bullish_ratio * 100).toFixed(0)}% bullish\\n`;\n  message += `• News Sources: SearxNG + Freqtrade\\n\\n`;\n  \n  const now = new Date();\n  message += `⏰ _${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0].substring(0,5)} UTC_\\n`;\n  message += `⚠️ _Self-hosted analysis. Always use proper risk management._`;\n  \n  return [{ message, signal_count: validSignals.length }];\n} else {\n  // Build market overview when no signals\n  const analyzedCoins = allAnalysis.length;\n  const avgBullScore = allAnalysis.reduce((sum, item) => sum + (item.json.bullish_score || 0), 0) / analyzedCoins;\n  const avgBearScore = allAnalysis.reduce((sum, item) => sum + (item.json.bearish_score || 0), 0) / analyzedCoins;\n  const topBullish = allAnalysis.sort((a, b) => (b.json.bullish_score || 0) - (a.json.bullish_score || 0)).slice(0, 3);\n  const topBearish = allAnalysis.sort((a, b) => (b.json.bearish_score || 0) - (a.json.bearish_score || 0)).slice(0, 3);\n  \n  let message = `📊 **CRYPTO MARKET ANALYSIS** (Self-Hosted)\\n\\n`;\n  message += `❌ **No high-conviction signals found** (requiring 70%+ win probability)\\n\\n`;\n  \n  message += `📈 **MARKET OVERVIEW**\\n`;\n  message += `• Fear & Greed Index: ${marketContext.marketOverview.fear_greed_index}/100 (${marketContext.marketOverview.fear_greed_sentiment})\\n`;\n  message += `• BTC Dominance: ${marketContext.marketOverview.btc_dominance.toFixed(1)}%\\n`;\n  message += `• Market Cap: $${(marketContext.marketOverview.total_market_cap / 1e12).toFixed(2)}T\\n`;\n  message += `• 24h Volume: $${(marketContext.marketOverview.total_volume / 1e9).toFixed(0)}B\\n\\n`;\n  \n  message += `🔍 **ANALYSIS SUMMARY**\\n`;\n  message += `• Coins Analyzed: ${analyzedCoins}\\n`;\n  message += `• Avg Bullish Score: ${avgBullScore.toFixed(1)}/10\\n`;\n  message += `• Avg Bearish Score: ${avgBearScore.toFixed(1)}/10\\n`;\n  message += `• Data Sources: Freqtrade + SearxNG\\n\\n`;\n  \n  message += `⭐ **WATCH LIST** (Highest scores but not quite signal-ready)\\n`;\n  if (topBullish[0]?.json.bullish_score > 3) {\n    message += `📈 Bullish: ${topBullish[0].json.symbol} (${topBullish[0].json.bullish_score}/10)\\n`;\n  }\n  if (topBearish[0]?.json.bearish_score > 3) {\n    message += `📉 Bearish: ${topBearish[0].json.symbol} (${topBearish[0].json.bearish_score}/10)\\n`;\n  }\n  \n  message += `\\n💡 **RECOMMENDATION**\\n`;\n  if (marketContext.marketOverview.fear_greed_index < 25) {\n    message += `Market in extreme fear - potential buying opportunities developing.`;\n  } else if (marketContext.marketOverview.fear_greed_index > 75) {\n    message += `Market in extreme greed - be cautious, consider profit-taking.`;\n  } else if (marketContext.marketStructure.bullish_ratio > 0.7) {\n    message += `Strong bullish momentum across market - wait for pullbacks.`;\n  } else if (marketContext.marketStructure.bearish_ratio > 0.7) {\n    message += `Market weakness - wait for stabilization before entries.`;\n  } else {\n    message += `Market consolidating - patience required for clear signals.`;\n  }\n  \n  const now = new Date();\n  message += `\\n\\n⏰ _${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0].substring(0,5)} UTC_`;\n  \n  return [{ message, signal_count: 0 }];\n}"
+      },
+      "id": "compile-final-analysis",
+      "name": "Compile Final Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2440, 250]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $vars.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send-to-telegram",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2660, 250],
+      "credentials": {
+        "telegramApi": {
+          "id": "crypto-kush-bot",
+          "name": "crypto-kush-bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "Market Overview",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fear & Greed Index",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Top 100 Coins",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SearxNG Crypto News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Overview": {
+      "main": [
+        [
+          {
+            "node": "Merge Market Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fear & Greed Index": {
+      "main": [
+        [
+          {
+            "node": "Merge Market Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Top 100 Coins": {
+      "main": [
+        [
+          {
+            "node": "Merge Market Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "SearxNG Crypto News": {
+      "main": [
+        [
+          {
+            "node": "Parse Crypto News HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Crypto News HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge Market Data",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Market Data": {
+      "main": [
+        [
+          {
+            "node": "Market Context Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Context Analysis": {
+      "main": [
+        [
+          {
+            "node": "Split for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split for Analysis": {
+      "main": [
+        [
+          {
+            "node": "Freqtrade 4H Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Freqtrade Daily Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SearxNG Coin News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freqtrade 4H Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Coin Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freqtrade Daily Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Coin Analysis",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SearxNG Coin News": {
+      "main": [
+        [
+          {
+            "node": "Parse Coin News HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Coin News HTML": {
+      "main": [
+        [
+          {
+            "node": "Coin Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coin Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Merge Coin Analysis",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Coin Analysis": {
+      "main": [
+        [
+          {
+            "node": "Advanced Signal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced Signal Analysis": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Signals": {
+      "main": [
+        [
+          {
+            "node": "Split for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compile Final Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Final Analysis": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "self-hosted-crypto-analyzer"
+  },
+  "id": "self-hosted-crypto-analyzer",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "self-hosted",
+      "name": "self-hosted"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "freqtrade",
+      "name": "freqtrade"
+    }
+  ]
+} 

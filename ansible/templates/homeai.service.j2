@@ -1,0 +1,18 @@
+[Unit]
+Description=FlowLab - Your Personal Automation Laboratory
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ remote_project_path }}
+ExecStart=/bin/bash -c 'source config.env && /usr/bin/docker-compose up -d'
+ExecStop=/bin/bash -c 'source config.env && /usr/bin/docker-compose down'
+ExecReload=/bin/bash -c 'source config.env && /usr/bin/docker-compose restart'
+User={{ homeai_user }}
+Group={{ homeai_group }}
+Environment=COMPOSE_PROJECT_NAME={{ project_name }}
+
+[Install]
+WantedBy=multi-user.target 

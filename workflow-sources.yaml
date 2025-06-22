@@ -1,0 +1,59 @@
+# =============================================================================
+# N8N Workflow Sources Configuration
+# =============================================================================
+# This file contains curated sources of n8n workflows for reference and learning
+# Run ./scripts/download-workflow-sources.sh to fetch all workflows locally
+
+sources:
+  # Community Collections
+  - name: "zie619-community-workflows"
+    description: "Large collection of community n8n workflows"
+    type: "github"
+    url: "https://github.com/Zie619/n8n-workflows"
+    path: "workflows"
+    tags: ["community", "examples", "comprehensive"]
+    
+  - name: "n8n-official-examples"
+    description: "Official n8n workflow examples"
+    type: "github" 
+    url: "https://github.com/n8n-io/n8n"
+    path: "packages/cli/templates"
+    tags: ["official", "templates", "starter"]
+
+  # Additional Community Sources
+  - name: "netroy-n8n-workflows"
+    description: "Quality workflow examples from n8n contributor"
+    type: "github"
+    url: "https://github.com/netroy/n8n-workflows"
+    path: ""
+    tags: ["community", "contributor", "quality"]
+    
+  - name: "n8n-examples-workflows"
+    description: "Various workflow examples"
+    type: "github"
+    url: "https://github.com/bramkn/n8n-workflows-examples"
+    path: ""
+    tags: ["examples", "tutorials", "learning"]
+
+# Download Configuration
+download:
+  # Where to store reference workflows (gitignored)
+  target_directory: "workflow-references"
+  
+  # Whether to organize by source name
+  organize_by_source: true
+  
+  # File patterns to download
+  include_patterns:
+    - "*.json"
+    - "*.md"
+    - "README*"
+  
+  # Folders to skip
+  exclude_patterns:
+    - "node_modules"
+    - ".git"
+    - "*.log"
+    
+  # Whether to flatten directory structure
+  flatten_structure: false 

@@ -1,0 +1,346 @@
+# =============================================================================
+# SearxNG Configuration - FlowLab
+# =============================================================================
+# Optimized for crypto workflows and automation
+# Supports JSON API format for programmatic access
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "HomeAI Search"
+  contact_url: false
+  privacypolicy_url: false
+  enable_metrics: false
+
+brand:
+  new_issue_url: false
+  docs_url: false
+  public_instances: false
+  wiki_url: false
+  issue_url: false
+
+search:
+  safe_search: 0
+  autocomplete: "duckduckgo"
+  default_lang: "en"
+  max_page: 0
+  # Enable JSON format for API access
+  formats:
+    - html
+    - json
+    - csv
+    - rss
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  # Generate secret dynamically - no hardcoded secrets
+  secret_key: "homeai-searxng-secret-key-change-in-production"
+  base_url: false
+  image_proxy: true
+  http_protocol_version: "1.1"
+  method: "POST"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-XSS-Protection: 1; mode=block
+    X-Download-Options: noopen
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  default_locale: ""
+  theme_args:
+    simple_style: auto
+  results_on_new_tab: false
+  advanced_search: true
+  search_on_category_select: true
+  hotkeys: default
+
+# =============================================================================
+# SEARCH ENGINES CONFIGURATION
+# =============================================================================
+# Optimized for crypto, news, tech, and general automation workflows
+
+engines:
+  # =============================================================================
+  # GENERAL WEB SEARCH
+  # =============================================================================
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    categories: [general, web]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: startpage
+    engine: startpage
+    shortcut: sp
+    categories: [general, web]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    categories: [general, web]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    categories: [general, web]
+    disabled: false
+    timeout: 3.0
+    weight: 0.8
+
+  # =============================================================================
+  # NEWS SOURCES
+  # =============================================================================
+  - name: bing news
+    engine: bing_news
+    shortcut: bn
+    categories: [news]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: yahoo news
+    engine: yahoo_news
+    shortcut: yn
+    categories: [news]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: google news
+    engine: google_news
+    shortcut: gn
+    categories: [news]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  # =============================================================================
+  # SOCIAL MEDIA & FORUMS
+  # =============================================================================
+  - name: reddit
+    engine: reddit
+    shortcut: re
+    categories: [social media]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: twitter
+    engine: twitter
+    shortcut: tw
+    categories: [social media]
+    disabled: false
+    timeout: 3.0
+    weight: 0.8
+
+  # =============================================================================
+  # TECHNOLOGY & DEVELOPMENT
+  # =============================================================================
+  - name: github
+    engine: github
+    shortcut: gh
+    categories: [it, tech]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: stackoverflow
+    engine: stackoverflow
+    shortcut: so
+    categories: [it, tech]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: hacker news
+    engine: hackernews
+    shortcut: hn
+    categories: [it, tech]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  # =============================================================================
+  # KNOWLEDGE & REFERENCE
+  # =============================================================================
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    categories: [general, reference]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: wikidata
+    engine: wikidata
+    shortcut: wd
+    categories: [reference]
+    disabled: false
+    timeout: 3.0
+    weight: 0.5
+
+  # =============================================================================
+  # CRYPTO & FINANCE ENGINES
+  # =============================================================================
+  - name: coinmarketcap
+    engine: xpath
+    search_url: https://coinmarketcap.com/search?q={query}
+    url_xpath: //a[contains(@class, "cmc-link")]/@href
+    title_xpath: //a[contains(@class, "cmc-link")]//span/text()
+    content_xpath: //p[contains(@class, "coin-item-description")]/text()
+    categories: [crypto, finance]
+    shortcut: cmc
+    disabled: false
+    timeout: 4.0
+    weight: 1
+
+  - name: coingecko
+    engine: xpath
+    search_url: https://www.coingecko.com/en/search?query={query}
+    url_xpath: //a[contains(@class, "tw-no-underline")]/@href
+    title_xpath: //a[contains(@class, "tw-no-underline")]//span[contains(@class, "tw-font-semibold")]/text()
+    content_xpath: //a[contains(@class, "tw-no-underline")]//span[contains(@class, "tw-text-gray-500")]/text()
+    categories: [crypto, finance]
+    shortcut: cg
+    disabled: false
+    timeout: 4.0
+    weight: 1
+
+  - name: cryptopanic
+    engine: xpath
+    search_url: https://cryptopanic.com/news/?filter=all&q={query}
+    url_xpath: //a[@class="nc-title"]/@href
+    title_xpath: //a[@class="nc-title"]/text()
+    content_xpath: //div[@class="nc-source"]/text()
+    categories: [crypto, news]
+    shortcut: cp
+    disabled: false
+    timeout: 4.0
+    weight: 1
+
+  - name: coindesk
+    engine: xpath
+    search_url: https://www.coindesk.com/search?s={query}
+    url_xpath: //h4/a/@href
+    title_xpath: //h4/a/text()
+    content_xpath: //p[@class="excerpt"]/text()
+    categories: [crypto, news]
+    shortcut: cd
+    disabled: false
+    timeout: 4.0
+    weight: 1
+
+  # =============================================================================
+  # MULTIMEDIA & CONTENT
+  # =============================================================================
+  - name: youtube
+    engine: youtube_noapi
+    shortcut: yt
+    categories: [videos]
+    disabled: false
+    timeout: 3.0
+    weight: 1
+
+  - name: vimeo
+    engine: vimeo
+    shortcut: vm
+    categories: [videos]
+    disabled: false
+    timeout: 3.0
+    weight: 0.5
+
+# =============================================================================
+# CATEGORIES CONFIGURATION
+# =============================================================================
+categories_as_tabs:
+  general:
+    - general
+    - web
+  crypto:
+    - crypto
+    - finance
+  news:
+    - news
+  tech:
+    - it
+    - tech
+  social:
+    - social media
+  videos:
+    - videos
+  reference:
+    - reference
+
+# =============================================================================
+# DISABLED ENGINES
+# =============================================================================
+# Engines that are not useful for our automation workflows
+disabled_engines:
+  - arch linux wiki
+  - currency
+  - deezer
+  - deviantart
+  - dictzone
+  - fdroid
+  - flickr
+  - google play apps
+  - google play movies
+  - imdb
+  - kickass
+  - library genesis
+  - lobste.rs
+  - material icons
+  - mdn
+  - microsoft academic
+  - nyaa
+  - openstreetmap
+  - photon
+  - piratebay
+  - pubmed
+  - qwant
+  - qwant news
+  - semantic scholar
+  - soundcloud
+  - stackexchange
+  - torrentz
+  - unsplash
+  - url shortener
+  - wallhaven
+  - wikimedia commons
+  - wikinews
+  - wikiquote
+  - wikisource
+  - wttr.in
+  - yandex
+  - yacy
+
+# =============================================================================
+# OUTGOING REQUEST SETTINGS
+# =============================================================================
+outgoing:
+  request_timeout: 3.0
+  max_request_timeout: 6.0
+  useragent_suffix: ""
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+# =============================================================================
+# RESULT FILTERING
+# =============================================================================
+result_proxy:
+  url: false
+  key: false 
