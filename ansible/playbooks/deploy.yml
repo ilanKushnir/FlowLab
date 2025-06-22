@@ -141,8 +141,6 @@
         group: "{{ homeai_group }}"
         mode: '0644'
         
-
-        
     - name: "📈 Copy Freqtrade config file"
       copy:
         src: "{{ playbook_dir }}/../../docker/services/freqtrade/config.json"
@@ -185,23 +183,6 @@
         - reload systemd
         - start homeai
         
-    - name: "🛠️  Initialize Freqtrade volume with config"
-      shell: |
-        cd {{ remote_project_path }}
-        source config.env
-        # Create volume and initialize with config
-        docker-compose pull freqtrade
-        docker volume create homeai_freqtrade_data || true
-        docker run --rm \
-          -v homeai_freqtrade_data:/freqtrade/user_data \
-          -v {{ remote_project_path }}/services/freqtrade/config.json:/tmp/config.json \
-          -v {{ remote_project_path }}/services/freqtrade/strategies:/tmp/strategies \
-          busybox sh -c "
-            cp /tmp/config.json /freqtrade/user_data/ && 
-            cp -r /tmp/strategies /freqtrade/user_data/
-          "
-      become_user: "{{ homeai_user }}"
-      
     - name: "🚀 Start services"
       shell: |
         cd {{ remote_project_path }}
@@ -232,8 +213,19 @@
         msg: |
           🟢 Running services: {{ running_services.stdout_lines | join(', ') if running_services.stdout_lines | length > 0 else 'None detected' }}
           📈 Total running: {{ running_services.stdout_lines | length }}/6 expected services
-          📝 If any services are missing, check logs with: ./scripts/helpers/logs.sh [service_name]
-          🐳 Full docker-compose status: Use 'docker-compose ps' on target system for detailed view
+          
+          🧪 FlowLab Architecture:
+          • N8N: Workflow automation platform
+          • SearXNG: Privacy-focused search (with JSON API enabled)
+          • Freqtrade: Market data API (optional - workflows use CoinGecko)
+          • PostgreSQL: Database backend
+          • Portainer: Container management
+          • Watchtower: Auto-updates
+          
+          📝 Troubleshooting:
+          • Check logs: ./scripts/helpers/logs.sh [service_name]
+          • Full status: docker-compose ps
+          • Enhanced crypto scanner uses CoinGecko API (no Freqtrade dependency)
           
     - name: "🔍 Debug: Show raw docker-compose output"
       shell: |
@@ -270,13 +262,30 @@
           
           🏠 Local Services:
           📊 N8N:          http://{{ ansible_host }}:5678
-          🔍 SearxNG:      http://{{ ansible_host }}:8080  
-          📈 Freqtrade:    http://{{ ansible_host }}:8081
+          🔍 SearXNG:      http://{{ ansible_host }}:8080 (JSON API enabled)
+          📈 Freqtrade:    http://{{ ansible_host }}:8081 (optional)
           🐳 Portainer:    http://{{ ansible_host }}:9000
           
+          🚀 Ready-to-Use Workflows:
+          • Enhanced Crypto Scanner (uses CoinGecko API)
+          • News sentiment analysis via SearXNG
+          • Technical analysis with RSI, MACD, EMAs
+          • Telegram notifications ready
+          
+          📝 Recent Improvements:
+          • SearXNG JSON API properly configured
+          • Simplified architecture using CoinGecko
+          • Enhanced error handling and reliability
+          • All configuration files properly mounted
+          
+          📋 Next Steps:
+          1. Import workflows from /workflows/n8n/ in N8N
+          2. Configure Telegram bot credentials
+          3. Test the Enhanced Crypto Scanner workflow
+          
           📝 Notes:
-          • Services are starting up (may take 2-3 minutes)
-          • All configurations are clean - create your own passwords
+          • Services may take 2-3 minutes to fully start
+          • All configurations are clean - set your own passwords
           • Data persists across deployments
           • Auto-updates run daily at 2 AM
  
