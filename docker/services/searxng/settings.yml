@@ -9,16 +9,16 @@ use_default_settings: true
 general:
   debug: false
   instance_name: "HomeAI Search"
-  contact_url: false
-  privacypolicy_url: false
+  contact_url: ""
+  privacypolicy_url: ""
   enable_metrics: false
 
 brand:
-  new_issue_url: false
-  docs_url: false
-  public_instances: false
-  wiki_url: false
-  issue_url: false
+  new_issue_url: ""
+  docs_url: ""
+  public_instances: ""
+  wiki_url: ""
+  issue_url: ""
 
 search:
   safe_search: 0
@@ -37,7 +37,7 @@ server:
   bind_address: "0.0.0.0"
   # Generate secret dynamically - no hardcoded secrets
   secret_key: "homeai-searxng-secret-key-change-in-production"
-  base_url: false
+  base_url: ""
   image_proxy: true
   http_protocol_version: "1.1"
   method: "POST"
@@ -138,14 +138,6 @@ engines:
     timeout: 3.0
     weight: 1
 
-  - name: twitter
-    engine: twitter
-    shortcut: tw
-    categories: [social media]
-    disabled: false
-    timeout: 3.0
-    weight: 0.8
-
   # =============================================================================
   # TECHNOLOGY & DEVELOPMENT
   # =============================================================================
@@ -165,9 +157,9 @@ engines:
     timeout: 3.0
     weight: 1
 
-  - name: hacker news
+  - name: hackernews
     engine: hackernews
-    shortcut: hn
+    shortcut: hackernews
     categories: [it, tech]
     disabled: false
     timeout: 3.0
@@ -342,5 +334,5 @@ outgoing:
 # RESULT FILTERING
 # =============================================================================
 result_proxy:
-  url: false
-  key: false 
+  url: ""
+  key: "" 

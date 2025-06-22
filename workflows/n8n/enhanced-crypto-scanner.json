@@ -1,0 +1,353 @@
+{
+  "name": "Enhanced Crypto Scanner - Self-Hosted Pro",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0,6,12,18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "enhanced-cron-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false&price_change_percentage=1h,24h,7d",
+        "options": {}
+      },
+      "id": "top-50-coins",
+      "name": "Top 50 Coins",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.alternative.me/fng/",
+        "options": {}
+      },
+      "id": "market-sentiment",
+      "name": "Market Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and prepare coins for analysis\nconst coins = $('Top 50 Coins').first().json;\nconst marketSentiment = $('Market Sentiment').first().json.data[0];\n\n// Filter coins based on quality criteria\nconst qualityCoins = coins.filter(coin => {\n  return coin.market_cap > 500000000 && // $500M+ market cap\n         coin.total_volume > 50000000 && // $50M+ 24h volume\n         coin.current_price > 0.01 && // Avoid extremely low price coins\n         coin.market_cap_rank <= 30 && // Top 30 only for highest quality\n         // Focus on major, liquid coins\n         ['BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOT', 'MATIC', 'LTC', 'AVAX', \n          'LINK', 'UNI', 'ATOM', 'XLM', 'FIL', 'TRX', 'ETC', 'THETA', 'VET', 'ICP',\n          'DOGE', 'SHIB', 'CRO', 'NEAR', 'APT', 'OP', 'ARB'].includes(coin.symbol.toUpperCase());\n}).slice(0, 15); // Limit to top 15 for focused analysis\n\n// Market context for scoring adjustments\nconst marketContext = {\n  fear_greed: marketSentiment.value,\n  fear_greed_class: marketSentiment.value_classification,\n  market_direction: marketSentiment.value > 50 ? 'bullish' : 'bearish',\n  total_market_cap: coins.reduce((sum, coin) => sum + coin.market_cap, 0),\n  gainers_count: coins.filter(c => c.price_change_percentage_24h > 0).length,\n  losers_count: coins.filter(c => c.price_change_percentage_24h < 0).length\n};\n\nreturn qualityCoins.map(coin => ({\n  ...coin,\n  marketContext: marketContext\n}));"
+      },
+      "id": "filter-quality-coins",
+      "name": "Filter Quality Coins",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-for-analysis",
+      "name": "Split for Analysis",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://freqtrade:8080/api/v1/pair_candles?pair={{ $json.symbol.toUpperCase() }}/USDT&timeframe=1h&limit=200",
+        "options": {}
+      },
+      "id": "freqtrade-1h-data",
+      "name": "Freqtrade 1H Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "=http://freqtrade:8080/api/v1/pair_candles?pair={{ $json.symbol.toUpperCase() }}/USDT&timeframe=4h&limit=100",
+        "options": {}
+      },
+      "id": "freqtrade-4h-data",
+      "name": "Freqtrade 4H Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://freqtrade:8080/api/v1/pair_candles?pair={{ $json.symbol.toUpperCase() }}/USDT&timeframe=1d&limit=50",
+        "options": {}
+      },
+      "id": "freqtrade-daily-data",
+      "name": "Freqtrade Daily Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "url": "=http://searxng:8080/search?q={{ encodeURIComponent($json.name + ' ' + $json.symbol + ' cryptocurrency news') }}&categories=news&time_range=day&pageno=1",
+        "options": {}
+      },
+      "id": "coin-news",
+      "name": "Coin News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced technical analysis using multiple timeframes\nconst coinData = $('Split for Analysis').item.json;\nconst candles1h = $('Freqtrade 1H Data').first().json.data || [];\nconst candles4h = $('Freqtrade 4H Data').first().json.data || [];\nconst candlesDaily = $('Freqtrade Daily Data').first().json.data || [];\nconst newsHtml = $('Coin News').first().binary.data.toString();\n\n// Helper functions for technical indicators\nfunction calculateRSI(prices, period = 14) {\n  if (prices.length < period + 1) return 50;\n  \n  let gains = 0, losses = 0;\n  for (let i = 1; i <= period; i++) {\n    const change = prices[prices.length - i] - prices[prices.length - i - 1];\n    if (change > 0) gains += change;\n    else losses -= change;\n  }\n  \n  const avgGain = gains / period;\n  const avgLoss = losses / period;\n  if (avgLoss === 0) return avgGain > 0 ? 100 : 50;\n  const rs = avgGain / avgLoss;\n  return 100 - (100 / (1 + rs));\n}\n\nfunction calculateEMA(prices, period) {\n  if (prices.length < period) return prices[prices.length - 1] || 0;\n  \n  const k = 2 / (period + 1);\n  let ema = prices[prices.length - period];\n  \n  for (let i = prices.length - period + 1; i < prices.length; i++) {\n    ema = (prices[i] * k) + (ema * (1 - k));\n  }\n  return ema;\n}\n\nfunction calculateMACD(prices, fast = 12, slow = 26) {\n  if (prices.length < slow) return { macd: 0, signal: 0, histogram: 0 };\n  \n  const emaFast = calculateEMA(prices, fast);\n  const emaSlow = calculateEMA(prices, slow);\n  const macdLine = emaFast - emaSlow;\n  \n  // Calculate signal line (9-period EMA of MACD)\n  const macdValues = [];\n  for (let i = slow; i < prices.length; i++) {\n    const fastEma = calculateEMA(prices.slice(0, i + 1), fast);\n    const slowEma = calculateEMA(prices.slice(0, i + 1), slow);\n    macdValues.push(fastEma - slowEma);\n  }\n  \n  const signalLine = calculateEMA(macdValues, 9);\n  const histogram = macdLine - signalLine;\n  \n  return { macd: macdLine, signal: signalLine, histogram: histogram };\n}\n\nfunction parseNewsForSentiment(html) {\n  const results = [];\n  const resultPattern = /<article[^>]*class=\"[^\"]*result[^\"]*\"[^>]*>([\\s\\S]*?)<\\/article>/gi;\n  let match;\n\n  while ((match = resultPattern.exec(html)) !== null) {\n    const resultHtml = match[1];\n    \n    const titleMatch = /<h3[^>]*>\\s*<a[^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h3>/i.exec(resultHtml);\n    let title = titleMatch ? titleMatch[1].trim() : '';\n    title = title.replace(/<span[^>]*class=\"highlight\"[^>]*>([^<]+)<\\/span>/gi, '$1');\n    title = title.replace(/<[^>]+>/g, '').trim();\n    \n    if (title) results.push(title);\n  }\n  \n  return results.slice(0, 10); // Top 10 headlines\n}\n\nfunction calculateSentimentScore(headlines, coin) {\n  if (!headlines || headlines.length === 0) return 0;\n  \n  const positiveWords = ['bullish', 'pump', 'rally', 'surge', 'gains', 'up', 'rise', 'breakout', 'moon', 'all-time', 'high', 'partnership', 'adoption', 'upgrade'];\n  const negativeWords = ['bearish', 'dump', 'crash', 'fall', 'down', 'drop', 'correction', 'sell-off', 'decline', 'hack', 'scam', 'regulation', 'ban'];\n  \n  let score = 0;\n  const text = headlines.join(' ').toLowerCase();\n  \n  positiveWords.forEach(word => {\n    const matches = (text.match(new RegExp(word, 'g')) || []).length;\n    score += matches;\n  });\n  \n  negativeWords.forEach(word => {\n    const matches = (text.match(new RegExp(word, 'g')) || []).length;\n    score -= matches;\n  });\n  \n  // Normalize to -1 to 1 range\n  return Math.max(-1, Math.min(1, score / Math.max(1, headlines.length)));\n}\n\n// Extract price data\nconst prices1h = candles1h.map(c => c[4]).filter(p => p > 0);\nconst prices4h = candles4h.map(c => c[4]).filter(p => p > 0);\nconst pricesDaily = candlesDaily.map(c => c[4]).filter(p => p > 0);\n\nif (prices1h.length < 50 || prices4h.length < 25) {\n  return {\n    symbol: coinData.symbol,\n    error: 'Insufficient data',\n    data_points: { h1: prices1h.length, h4: prices4h.length }\n  };\n}\n\n// Calculate indicators for different timeframes\nconst currentPrice = coinData.current_price;\nconst rsi1h = calculateRSI(prices1h);\nconst rsi4h = calculateRSI(prices4h);\nconst rsiDaily = calculateRSI(pricesDaily);\n\nconst macd1h = calculateMACD(prices1h);\nconst macd4h = calculateMACD(prices4h);\n\nconst ema20_1h = calculateEMA(prices1h, 20);\nconst ema50_1h = calculateEMA(prices1h, 50);\nconst ema20_4h = calculateEMA(prices4h, 20);\nconst ema50_4h = calculateEMA(prices4h, 50);\nconst ema200_daily = calculateEMA(pricesDaily, 50); // Use 50 for daily as we have limited data\n\n// Parse news sentiment\nconst headlines = parseNewsForSentiment(newsHtml);\nconst sentimentScore = calculateSentimentScore(headlines, coinData);\n\n// Enhanced scoring system (0-10 scale)\nlet longScore = 0;\nlet shortScore = 0;\nlet reasons = [];\n\n// === LONG SIGNAL CRITERIA ===\n\n// 1. RSI Oversold (Multi-timeframe confirmation)\nif (rsi1h < 30 && rsi4h < 40) {\n  longScore += 3;\n  reasons.push('Multi-TF RSI oversold');\n} else if (rsi1h < 35) {\n  longScore += 1;\n  reasons.push('1H RSI oversold');\n}\n\n// 2. MACD Bullish Cross\nif (macd1h.macd > macd1h.signal && macd4h.macd > macd4h.signal) {\n  longScore += 2;\n  reasons.push('Multi-TF MACD bullish');\n} else if (macd1h.macd > macd1h.signal) {\n  longScore += 1;\n  reasons.push('1H MACD cross up');\n}\n\n// 3. Price above key EMAs\nif (currentPrice > ema20_1h && currentPrice > ema50_1h && currentPrice > ema200_daily) {\n  longScore += 2;\n  reasons.push('Above all EMAs');\n} else if (currentPrice > ema20_1h) {\n  longScore += 1;\n  reasons.push('Above 20 EMA');\n}\n\n// 4. Positive sentiment\nif (sentimentScore > 0.3) {\n  longScore += 2;\n  reasons.push('Strong positive news');\n} else if (sentimentScore > 0) {\n  longScore += 1;\n  reasons.push('Positive sentiment');\n}\n\n// 5. Market structure support\nif (coinData.marketContext.fear_greed > 40 && coinData.price_change_percentage_24h > -5) {\n  longScore += 1;\n  reasons.push('Market support');\n}\n\n// === SHORT SIGNAL CRITERIA ===\n\n// 1. RSI Overbought\nif (rsi1h > 80 && rsi4h > 70) {\n  shortScore += 3;\n  reasons.push('Multi-TF RSI overbought');\n} else if (rsi1h > 75) {\n  shortScore += 1;\n  reasons.push('1H RSI overbought');\n}\n\n// 2. MACD Bearish Cross\nif (macd1h.macd < macd1h.signal && macd4h.macd < macd4h.signal) {\n  shortScore += 2;\n  reasons.push('Multi-TF MACD bearish');\n} else if (macd1h.macd < macd1h.signal) {\n  shortScore += 1;\n  reasons.push('1H MACD cross down');\n}\n\n// 3. Price below key EMAs\nif (currentPrice < ema20_1h && currentPrice < ema50_1h && currentPrice < ema200_daily) {\n  shortScore += 2;\n  reasons.push('Below all EMAs');\n} else if (currentPrice < ema20_1h) {\n  shortScore += 1;\n  reasons.push('Below 20 EMA');\n}\n\n// 4. Negative sentiment\nif (sentimentScore < -0.3) {\n  shortScore += 2;\n  reasons.push('Strong negative news');\n} else if (sentimentScore < 0) {\n  shortScore += 1;\n  reasons.push('Negative sentiment');\n}\n\n// 5. Market structure resistance\nif (coinData.marketContext.fear_greed < 60 && coinData.price_change_percentage_24h < 5) {\n  shortScore += 1;\n  reasons.push('Market resistance');\n}\n\n// Determine signal quality\nconst minScore = 5; // Minimum score for signal\nlet signal = null;\nlet finalScore = 0;\nlet direction = null;\n\nif (longScore >= minScore && longScore > shortScore) {\n  signal = true;\n  direction = 'LONG';\n  finalScore = longScore;\n} else if (shortScore >= minScore && shortScore > longScore) {\n  signal = true;\n  direction = 'SHORT';\n  finalScore = shortScore;\n}\n\n// Calculate risk management levels\nlet entry, stopLoss, takeProfit1, takeProfit2;\nif (signal) {\n  const atr = Math.abs(prices1h[prices1h.length - 1] - prices1h[prices1h.length - 21]) / 20; // Simplified ATR\n  const riskAmount = Math.max(atr, currentPrice * 0.02); // Min 2% risk\n  \n  entry = currentPrice;\n  \n  if (direction === 'LONG') {\n    stopLoss = entry - (riskAmount * 2);\n    takeProfit1 = entry + (riskAmount * 3);\n    takeProfit2 = entry + (riskAmount * 5);\n  } else {\n    stopLoss = entry + (riskAmount * 2);\n    takeProfit1 = entry - (riskAmount * 3);\n    takeProfit2 = entry - (riskAmount * 5);\n  }\n}\n\nreturn {\n  ok: signal === true,\n  symbol: coinData.symbol.toUpperCase(),\n  name: coinData.name,\n  direction: direction,\n  entry: entry,\n  stopLoss: stopLoss,\n  takeProfit1: takeProfit1,\n  takeProfit2: takeProfit2,\n  confidence: signal ? Math.min(85, finalScore * 12 + 25) : 0,\n  score: finalScore,\n  reasons: reasons.slice(0, 4),\n  technicals: {\n    rsi_1h: rsi1h.toFixed(1),\n    rsi_4h: rsi4h.toFixed(1),\n    macd_1h: macd1h.histogram.toFixed(4),\n    sentiment: sentimentScore.toFixed(2)\n  },\n  news_count: headlines.length,\n  market_context: coinData.marketContext.fear_greed\n};"
+      },
+      "id": "enhanced-signal-analysis",
+      "name": "Enhanced Signal Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1340, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ok }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter-signals",
+      "name": "Filter Valid Signals",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final analysis and create trading message\nconst allAnalysis = $input.all();\nconst validSignals = allAnalysis.filter(item => item.json && item.json.ok === true);\n\nfunction formatMessage() {\n  if (validSignals.length > 0) {\n    // High-conviction signals found\n    let message = `🚀 **HIGH-CONVICTION CRYPTO SETUPS**\\n\\n`;\n    \n    validSignals.forEach((signal, index) => {\n      const data = signal.json;\n      const riskReward = Math.abs((data.takeProfit1 - data.entry) / (data.entry - data.stopLoss)).toFixed(1);\n      const stopRisk = Math.abs((data.entry - data.stopLoss) / data.entry * 100).toFixed(1);\n      \n      message += `**${index + 1}. ${data.symbol}** (${data.name}) — **${data.direction}**\\n`;\n      message += `💰 Entry: $${data.entry.toFixed(data.entry < 1 ? 6 : 2)}\\n`;\n      message += `🛡️ Stop: $${data.stopLoss.toFixed(data.stopLoss < 1 ? 6 : 2)} (${stopRisk}% risk)\\n`;\n      message += `🎯 TP1: $${data.takeProfit1.toFixed(data.takeProfit1 < 1 ? 6 : 2)}\\n`;\n      message += `🚀 TP2: $${data.takeProfit2.toFixed(data.takeProfit2 < 1 ? 6 : 2)}\\n`;\n      message += `📊 Score: ${data.score}/10 | Confidence: ${data.confidence}%\\n`;\n      message += `📈 R:R = 1:${riskReward}\\n`;\n      message += `💡 **Key Factors:** ${data.reasons.join(', ')}\\n`;\n      message += `📋 RSI(1h/4h): ${data.technicals.rsi_1h}/${data.technicals.rsi_4h} | Sentiment: ${data.technicals.sentiment}\\n\\n`;\n    });\n    \n    // Market context\n    const marketFG = validSignals[0].json.market_context;\n    message += `📊 **Market Context:** Fear & Greed ${marketFG}/100\\n`;\n    message += `⏰ _Analysis: ${new Date().toISOString().split('T')[0]} ${new Date().toTimeString().split(' ')[0].substring(0,5)} UTC_\\n`;\n    message += `⚠️ _Self-hosted analysis. Use proper risk management._`;\n    \n    return message;\n  } else {\n    // No signals - market overview\n    const totalAnalyzed = allAnalysis.length;\n    const avgScore = allAnalysis.reduce((sum, item) => {\n      return sum + Math.max(item.json?.score || 0, 0);\n    }, 0) / Math.max(1, totalAnalyzed);\n    \n    const topScorer = allAnalysis.reduce((best, current) => {\n      const currentScore = Math.max(current.json?.score || 0, 0);\n      const bestScore = Math.max(best?.json?.score || 0, 0);\n      return currentScore > bestScore ? current : best;\n    }, allAnalysis[0]);\n    \n    let message = `📊 **CRYPTO MARKET SCAN** (Self-Hosted)\\n\\n`;\n    message += `❌ **No high-conviction signals** (min 5/10 score required)\\n\\n`;\n    message += `🔍 **Scan Results:**\\n`;\n    message += `• Coins Analyzed: ${totalAnalyzed}\\n`;\n    message += `• Avg Score: ${avgScore.toFixed(1)}/10\\n`;\n    \n    if (topScorer?.json) {\n      message += `• Top Scorer: ${topScorer.json.symbol} (${topScorer.json.score || 0}/10)\\n`;\n    }\n    \n    const marketFG = topScorer?.json?.market_context || 50;\n    message += `• Fear & Greed: ${marketFG}/100\\n\\n`;\n    \n    // Recommendation based on market conditions\n    if (marketFG < 25) {\n      message += `💡 **Extreme Fear** - Potential buying opportunities developing`;\n    } else if (marketFG > 75) {\n      message += `⚠️ **Extreme Greed** - Exercise caution, consider profit-taking`;\n    } else {\n      message += `😐 **Neutral Market** - Wait for clearer directional signals`;\n    }\n    \n    message += `\\n\\n⏰ _${new Date().toISOString().split('T')[0]} ${new Date().toTimeString().split(' ')[0].substring(0,5)} UTC_`;\n    \n    return message;\n  }\n}\n\nreturn [{\n  message: formatMessage(),\n  signalCount: validSignals.length,\n  timestamp: new Date().toISOString()\n}];"
+      },
+      "id": "compile-message",
+      "name": "Compile Final Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1780, 250]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $vars.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send-telegram",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2000, 250],
+      "credentials": {
+        "telegramApi": {
+          "id": "crypto-kush-bot",
+          "name": "crypto-kush-bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Top 50 Coins",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Market Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top 50 Coins": {
+      "main": [
+        [
+          {
+            "node": "Filter Quality Coins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Filter Quality Coins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Quality Coins": {
+      "main": [
+        [
+          {
+            "node": "Split for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split for Analysis": {
+      "main": [
+        [
+          {
+            "node": "Freqtrade 1H Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Freqtrade 4H Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Freqtrade Daily Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Coin News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freqtrade 1H Data": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Signal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freqtrade 4H Data": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Signal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freqtrade Daily Data": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Signal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coin News": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Signal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Signal Analysis": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Signals": {
+      "main": [
+        [
+          {
+            "node": "Split for Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compile Final Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Final Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "enhanced-crypto-scanner"
+  },
+  "id": "enhanced-crypto-scanner",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "crypto",
+      "name": "crypto"
+    },
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "enhanced",
+      "name": "enhanced"
+    }
+  ]
+}
