@@ -105,6 +105,8 @@ services:
     command: ["webserver", "--config", "/freqtrade/user_data/config.json"]
     volumes:
       - freqtrade_data:/freqtrade/user_data
+      - ./services/freqtrade/config.json:/freqtrade/user_data/config.json:ro
+      - ./services/freqtrade/strategies:/freqtrade/user_data/strategies:ro
     networks:
       - homeai
     healthcheck:

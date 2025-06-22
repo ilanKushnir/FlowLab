@@ -1,0 +1,280 @@
+# FlowLab - N8N Workflow Automation Platform
+# Cursor AI Assistant Configuration
+
+## Project Overview
+This is FlowLab, a comprehensive N8N workflow automation platform designed for cryptocurrency analysis, news monitoring, and automated trading signals. The platform runs on Raspberry Pi infrastructure and integrates multiple services for data collection, analysis, and notification.
+
+## Core Architecture
+- **N8N**: Primary workflow automation platform (port 5678)
+- **SearXNG**: Privacy-focused search engine with JSON API (port 8080)
+- **PostgreSQL**: Database backend for N8N workflows
+- **Portainer**: Container management interface (port 9000)
+- **Freqtrade**: Optional cryptocurrency market data API (port 8081)
+- **Watchtower**: Automatic container updates
+
+## Key Technologies
+- **Docker & Docker Compose**: Container orchestration
+- **Ansible**: Infrastructure as Code deployment
+- **Node.js/JavaScript**: N8N workflow development
+- **Python**: Custom scripts and strategies
+- **Bash**: Deployment and utility scripts
+
+## Project Structure
+
+### Core Directories
+- `workflows/n8n/`: Production-ready N8N workflows (JSON format)
+- `workflow-references/`: Reference workflows and examples (populated by download script)
+- `docker/`: Docker Compose configurations and service configs
+- `ansible/`: Infrastructure deployment automation
+- `scripts/`: Deployment, sync, and utility scripts
+- `docs/`: Documentation and setup guides
+
+### Important Files
+- `config.env.example`: Template for environment configuration
+- `workflow-sources.yaml`: Defines workflow sources for download
+- `docker/docker-compose.yml`: Main service definitions
+- `ansible/playbooks/deploy.yml`: Main deployment playbook
+
+## MCP (Model Context Protocol) Integration
+
+### Primary MCP Node
+Use the **n8n-nodes-mcp** community node for advanced AI integrations:
+- **GitHub**: https://github.com/nerding-io/n8n-nodes-mcp
+- **Package**: `@nerding-io/n8n-nodes-mcp`
+- **Purpose**: Connect N8N workflows to MCP servers for AI-powered automation
+
+### MCP Capabilities
+- **Tool Execution**: Execute MCP tools with parameters
+- **Resource Access**: Read resources from MCP servers
+- **Prompt Templates**: Use predefined prompts for consistent AI interactions
+- **Multi-Server Support**: Connect to multiple MCP servers simultaneously
+
+### MCP Transport Types
+1. **HTTP Streamable** (Recommended): Modern streaming protocol
+2. **Command Line**: Direct server execution via CLI
+3. **Server-Sent Events** (Legacy): Deprecated but still supported
+
+### Common MCP Servers
+- `@modelcontextprotocol/server-brave-search`: Web search capabilities
+- `@modelcontextprotocol/server-openai`: OpenAI API integration
+- `@modelcontextprotocol/server-weather`: Weather data access
+- `@modelcontextprotocol/server-serper`: Google search API
+
+## Workflow Development Guidelines
+
+### Before Building Workflows
+1. **Check Workflow References**: Always examine `workflow-references/` for examples
+2. **Download Sources**: If references don't exist, run `scripts/download-workflow-sources.sh`
+3. **Review Existing Workflows**: Study `workflows/n8n/` for patterns and best practices
+
+### Workflow Best Practices
+1. **Error Handling**: Always include error handling nodes and fallback mechanisms
+2. **Rate Limiting**: Implement delays between API calls to avoid rate limits
+3. **Data Validation**: Validate input data before processing
+4. **Logging**: Use Set nodes to log important steps and data
+5. **Modular Design**: Break complex workflows into smaller, reusable components
+
+### API Integration Patterns
+- **CoinGecko API**: Use for cryptocurrency market data (no auth required)
+- **SearXNG JSON API**: Use for news and web search (local deployment)
+- **Telegram Bot API**: Use for notifications and alerts
+- **Freqtrade API**: Optional for advanced trading data (requires auth)
+
+### Data Processing Patterns
+- **Technical Analysis**: Implement RSI, MACD, EMA calculations in Function nodes
+- **Sentiment Analysis**: Process news data for market sentiment
+- **Signal Generation**: Combine technical and fundamental analysis
+- **Risk Management**: Always include position sizing and stop-loss logic
+
+## Development Workflow
+
+### Local Development
+1. Use `scripts/test-deployment.sh` to verify service availability
+2. Test workflows in N8N interface before production deployment
+3. Use `scripts/sync-workflows.sh` to sync workflows to production
+
+### Deployment Process
+1. Configure `config.env` with your Raspberry Pi details
+2. Run `scripts/deploy.sh` for full infrastructure deployment
+3. Use `ansible/playbooks/deploy.yml` for infrastructure updates
+4. Monitor with `scripts/helpers/logs.sh` for troubleshooting
+
+### Configuration Management
+- **Environment Variables**: Use `config.env` for sensitive data
+- **Service Configuration**: Modify files in `docker/services/`
+- **Ansible Variables**: Update `ansible/inventory/` for deployment settings
+
+## Security Considerations
+- **API Keys**: Store in N8N credentials, never in workflow JSON
+- **Network Access**: Services bound to local network by default
+- **Authentication**: Configure strong passwords after initial deployment
+- **Updates**: Watchtower handles automatic security updates
+
+## Common Patterns and Examples
+
+### Cryptocurrency Analysis Workflow
+```javascript
+// Technical Analysis Function Node Example
+const prices = $input.all()[0].json.prices; // CoinGecko format: [[timestamp, price], ...]
+const closePrices = prices.map(p => p[1]);
+
+// RSI Calculation
+function calculateRSI(prices, period = 14) {
+  const gains = [];
+  const losses = [];
+  
+  for (let i = 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i-1];
+    gains.push(change > 0 ? change : 0);
+    losses.push(change < 0 ? Math.abs(change) : 0);
+  }
+  
+  const avgGain = gains.slice(-period).reduce((a, b) => a + b) / period;
+  const avgLoss = losses.slice(-period).reduce((a, b) => a + b) / period;
+  
+  return avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+}
+
+return [{
+  json: {
+    rsi: calculateRSI(closePrices),
+    currentPrice: closePrices[closePrices.length - 1],
+    priceChange24h: ((closePrices[closePrices.length - 1] / closePrices[0]) - 1) * 100
+  }
+}];
+```
+
+### News Sentiment Analysis
+```javascript
+// SearXNG News Processing Function Node
+const newsResults = $input.all()[0].json.results;
+const sentimentKeywords = {
+  positive: ['bullish', 'surge', 'rally', 'breakthrough', 'adoption', 'growth'],
+  negative: ['bearish', 'crash', 'decline', 'regulatory', 'ban', 'concern']
+};
+
+const sentiment = newsResults.reduce((acc, article) => {
+  const content = (article.title + ' ' + article.content).toLowerCase();
+  const positiveScore = sentimentKeywords.positive.filter(word => content.includes(word)).length;
+  const negativeScore = sentimentKeywords.negative.filter(word => content.includes(word)).length;
+  
+  return {
+    positive: acc.positive + positiveScore,
+    negative: acc.negative + negativeScore,
+    neutral: acc.neutral + (positiveScore === negativeScore ? 1 : 0)
+  };
+}, { positive: 0, negative: 0, neutral: 0 });
+
+return [{ json: { sentiment, articles: newsResults.length } }];
+```
+
+### MCP Integration Example
+```javascript
+// Using MCP Client Node for AI Analysis
+// Node Configuration:
+// - Operation: Execute Tool
+// - Tool: brave_search
+// - Parameters: {"query": "cryptocurrency market analysis bitcoin ethereum"}
+
+// Follow-up Function Node to process MCP results:
+const searchResults = $input.all()[0].json;
+const relevantArticles = searchResults.results
+  .filter(result => result.title.toLowerCase().includes('bitcoin') || 
+                   result.title.toLowerCase().includes('ethereum'))
+  .slice(0, 5);
+
+return [{ json: { processedResults: relevantArticles } }];
+```
+
+## Troubleshooting Common Issues
+
+### Service Connectivity
+- Check service status with `docker ps` on Raspberry Pi
+- Verify network connectivity with `scripts/helpers/test-deployment.sh`
+- Review logs with `scripts/helpers/logs.sh`
+
+### Workflow Execution Errors
+- Check N8N execution logs in the interface
+- Verify API credentials are properly configured
+- Test individual nodes before running full workflow
+
+### MCP Server Issues
+- Ensure MCP servers are properly installed and accessible
+- Check environment variables are correctly set
+- Verify MCP server compatibility with n8n-nodes-mcp version
+
+## File Naming Conventions
+- **Workflows**: Use kebab-case with descriptive names (e.g., `crypto-scanner-workflow.json`)
+- **Scripts**: Use kebab-case with `.sh` extension
+- **Configuration**: Use lowercase with underscores (e.g., `config.env`)
+- **Documentation**: Use UPPERCASE for main docs (e.g., `README.md`)
+
+## Git Workflow
+- Commit workflow changes to `workflows/n8n/` directory
+- Use descriptive commit messages for workflow updates
+- Tag releases for major workflow versions
+- Keep sensitive data out of version control
+
+## Performance Optimization
+- Use HTTP Request Batch nodes for multiple API calls
+- Implement caching for frequently accessed data
+- Use Split In Batches for large datasets
+- Monitor workflow execution times and optimize bottlenecks
+
+## Testing Strategy
+- Test workflows with small datasets first
+- Use N8N's test execution feature
+- Verify all error handling paths
+- Test API rate limits and timeouts
+
+## Additional Resources
+- **N8N Documentation**: https://docs.n8n.io/
+- **MCP Protocol**: https://modelcontextprotocol.io/
+- **Docker Compose**: https://docs.docker.com/compose/
+- **Ansible Playbooks**: https://docs.ansible.com/ansible/latest/user_guide/playbooks.html
+
+## Environment Variables Reference
+```bash
+# Core Configuration
+PI_HOST=192.168.1.202
+PI_USER=pi
+PI_SSH_KEY=~/.ssh/id_rsa
+
+# N8N Configuration
+N8N_BASIC_AUTH_ACTIVE=true
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=secure_password
+
+# Database Configuration
+POSTGRES_DB=n8n
+POSTGRES_USER=n8n
+POSTGRES_PASSWORD=secure_db_password
+
+# MCP Environment Variables (Docker)
+MCP_BRAVE_API_KEY=your-brave-api-key
+MCP_OPENAI_API_KEY=your-openai-key
+MCP_SERPER_API_KEY=your-serper-key
+```
+
+## Quick Start Commands
+```bash
+# Initial setup
+cp config.env.example config.env
+# Edit config.env with your settings
+
+# Download workflow references
+./scripts/download-workflow-sources.sh
+
+# Deploy to Raspberry Pi
+./scripts/deploy.sh
+
+# Test deployment
+./scripts/helpers/test-deployment.sh
+
+# Sync workflows to production
+./scripts/sync-workflows.sh
+```
+
+---
+
+**Remember**: Always test workflows locally before deploying to production, and keep the workflow-references directory updated for the best development experience. 

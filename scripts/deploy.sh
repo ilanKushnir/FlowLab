@@ -174,9 +174,39 @@ show_summary() {
     echo -e "\n${GREEN}🧪 Welcome to your FlowLab! Start building amazing workflows! 🚀${NC}\n"
 }
 
+show_disclaimer() {
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║${NC}${RED}                                    ⚠️  IMPORTANT DISCLAIMER ⚠️                                     ${YELLOW}║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════════════════════════════════════════╝${NC}\n"
+    
+    echo -e "${WHITE}📋 ${CYAN}PREREQUISITES:${NC}"
+    echo -e "  ${GREEN}✓${NC} Raspberry Pi 4+ with Raspberry Pi OS and SSH enabled"
+    echo -e "  ${GREEN}✓${NC} SSH key configured: ${CYAN}ssh $PI_USER@$PI_HOST${NC} works"
+    echo -e "  ${GREEN}✓${NC} Ansible installed and network connectivity to Pi"
+    echo -e "  ${GREEN}✓${NC} config.env file properly configured"
+    
+    echo -e "\n${PURPLE}🚀 ${WHITE}DEPLOYMENT OVERVIEW:${NC}"
+    echo -e "  ${CYAN}•${NC} N8N Workflow Platform, SearXNG Search, PostgreSQL Database"
+    echo -e "  ${CYAN}•${NC} Portainer Management, Freqtrade API (optional), Auto-updates"
+    echo -e "  ${CYAN}•${NC} Ready-to-use crypto analysis and news sentiment workflows"
+    
+    echo -e "\n${YELLOW}⚠️  ${WHITE}IMPORTANT:${NC}"
+    echo -e "  ${RED}•${NC} This will modify your Pi's system and install Docker"
+    echo -e "  ${RED}•${NC} Process takes 10-15 minutes - ensure stable power/network"
+    echo -e "  ${RED}•${NC} Services start with default passwords - configure after deployment"
+    
+    echo -e "\n${WHITE}📍 Target: ${YELLOW}$PI_USER@$PI_HOST${NC} | SSH Key: ${YELLOW}$PI_SSH_KEY${NC}"
+    
+    echo -e "\n${CYAN}Press ${WHITE}[ENTER]${CYAN} to start deployment or ${WHITE}[Ctrl+C]${CYAN} to cancel...${NC}"
+    read -r
+    
+    echo -e "\n${GREEN}🚀 Starting FlowLab deployment...${NC}\n"
+}
+
 # Main execution
 main() {
     print_header
+    show_disclaimer
     check_prerequisites
     deploy
     show_summary

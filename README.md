@@ -84,6 +84,51 @@ curl "http://YOUR_PI_IP:8081/api/v1/available_pairs"
 curl "http://YOUR_PI_IP:8081/api/v1/pair_candles?pair=BTC/USDT&timeframe=1h"
 ```
 
+## 🤖 **MCP (Model Context Protocol) Integration**
+
+FlowLab includes [MCP server configuration](https://github.com/nerding-io/n8n-nodes-mcp) for AI-powered development in Cursor IDE.
+
+### **Setup MCP for Cursor**
+
+1. **Install MCP servers:**
+```bash
+./scripts/setup-mcp.sh
+```
+
+2. **Configure environment:**
+```bash
+cp mcp/mcp.env.example mcp/.env
+nano mcp/.env  # Add your API keys
+```
+
+3. **Enable in Cursor:**
+   - Open Cursor IDE
+   - Go to **Settings** → **Features** → **Model Context Protocol**
+   - Enable MCP and add configuration file: `mcp/mcp.json`
+   - Restart Cursor
+
+### **Available MCP Servers**
+- 🔧 **flowlab-n8n** - Direct N8N workflow management and automation
+- 🔍 **brave-search** - Web search capabilities for research
+- 🌐 **searxng-local** - Privacy-focused local search integration
+- 🌤️ **weather** - Weather data access for location-based workflows
+- 💰 **crypto-data** - Cryptocurrency market data and analysis
+
+### **Using MCP in Cursor**
+Once configured, you can ask Cursor to:
+- Create N8N workflows with proper node configurations
+- Search for crypto market data and news
+- Get weather information for location-based automation
+- Research topics using privacy-focused search
+- Generate workflow templates based on your requirements
+
+**Example prompts:**
+```
+"Create an N8N workflow that monitors Bitcoin price and sends Telegram alerts"
+"Search for recent cryptocurrency news and analyze sentiment"
+"Build a weather-based notification system for my location"
+```
+
 ## 💰 **Cost Comparison**
 
 | Service | Enterprise SaaS | FlowLab | Annual Savings |

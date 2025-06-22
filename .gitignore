@@ -2,6 +2,8 @@
 config.env
 .env
 *.env.local
+mcp.env
+mcp/.env
 
 # SSH keys and certificates
 *.pem

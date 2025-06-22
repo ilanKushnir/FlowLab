@@ -1,0 +1,44 @@
+{
+  "mcpServers": {
+    "flowlab-n8n": {
+      "command": "npx",
+      "args": ["-y", "@nerding-io/n8n-nodes-mcp"],
+      "env": {
+        "N8N_HOST": "http://192.168.1.202:5678",
+        "N8N_API_KEY": "${N8N_API_KEY}",
+        "N8N_USER": "${N8N_USER}",
+        "N8N_PASSWORD": "${N8N_PASSWORD}"
+      }
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      }
+    },
+    "searxng-local": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-web-search"],
+      "env": {
+        "SEARXNG_BASE_URL": "http://192.168.1.202:8080",
+        "SEARCH_ENGINE": "searxng"
+      }
+    },
+    "weather": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-weather"],
+      "env": {
+        "WEATHER_API_KEY": "${WEATHER_API_KEY}"
+      }
+    },
+    "crypto-data": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-web-search"],
+      "env": {
+        "COINGECKO_API_KEY": "${COINGECKO_API_KEY}",
+        "BASE_URL": "https://api.coingecko.com/api/v3"
+      }
+    }
+  }
+} 
