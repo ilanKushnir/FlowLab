@@ -11,18 +11,20 @@ WHITE='\033[1;37m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-# Simple FlowLab banner
+# Simple FlowLab banner  
 show_flowlab_banner() {
     echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    ███████╗██╗      ██████╗ ██╗    ██╗██╗      █████╗ ██████╗                                 ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    ██╔════╝██║     ██╔═══██╗██║    ██║██║     ██╔══██╗██╔══██╗                                ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    █████╗  ██║     ██║   ██║██║ █╗ ██║██║     ███████║██████╔╝                                ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    ██╔══╝  ██║     ██║   ██║██║███╗██║██║     ██╔══██║██╔══██╗                                ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    ██║     ███████╗╚██████╔╝╚███╔███╔╝███████╗██║  ██║██████╔╝                                ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${CYAN}    ╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═════╝                                 ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${WHITE}                                                                                                  ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${WHITE}                    🧪 Your Personal Automation Laboratory 🧪                                   ${PURPLE}║${NC}"
-    echo -e "${PURPLE}║${NC}${WHITE}                         Where workflows come to life!                                          ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}                                                                                                  ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  ███████╗██╗      ██████╗ ██╗    ██╗██╗      █████╗ ██████╗                               ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  ██╔════╝██║     ██╔═══██╗██║    ██║██║     ██╔══██╗██╔══██╗                              ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  █████╗  ██║     ██║   ██║██║ █╗ ██║██║     ███████║██████╔╝                              ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  ██╔══╝  ██║     ██║   ██║██║███╗██║██║     ██╔══██║██╔══██╗                              ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  ██║     ███████╗╚██████╔╝╚███╔███╔╝███████╗██║  ██║██████╔╝                              ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${CYAN}  ╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═════╝                               ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}                                                                                                  ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}${GREEN}                   🧪 Your Personal Automation Laboratory 🧪${PURPLE}                           ║${NC}"
+    echo -e "${PURPLE}║${NC}${WHITE}                         Where workflows come to life!${PURPLE}                                ║${NC}"
+    echo -e "${PURPLE}║${NC}                                                                                                  ${PURPLE}║${NC}"
     echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════════════════════════════════════════╝${NC}"
 }
 
